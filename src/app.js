@@ -101,7 +101,14 @@ app.get("/", (req, res) => {
   });
 });
 
-if (process.env.NODE_ENV !== "production") {
+if (process.env.NODE_ENV === "production") {
+  app.use("/api/docs", (req, res) => {
+    return res.status(404).json({
+      success: false,
+      message: "Rota não encontrada.",
+    });
+  });
+} else {
   app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 }
 
