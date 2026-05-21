@@ -110,6 +110,7 @@ async function confirmAppointment(req, res) {
     }
 
     appointment.appointmentStatus = "confirmed";
+
     await appointment.save();
 
     return res.json({
@@ -148,10 +149,10 @@ async function patientCheckin(req, res) {
 
     if (appointment.partnerCheckinAt) {
       appointment.checkinStatus = "double_confirmed";
-      appointment.appointmentStatus = "ready_to_start";
+      appointment.appointmentStatus = "scheduled";
     } else {
       appointment.checkinStatus = "patient_checked_in";
-      appointment.appointmentStatus = "patient_checked_in";
+      appointment.appointmentStatus = "scheduled";
     }
 
     await appointment.save();
@@ -192,10 +193,10 @@ async function partnerCheckin(req, res) {
 
     if (appointment.patientCheckinAt) {
       appointment.checkinStatus = "double_confirmed";
-      appointment.appointmentStatus = "ready_to_start";
+      appointment.appointmentStatus = "scheduled";
     } else {
       appointment.checkinStatus = "partner_checked_in";
-      appointment.appointmentStatus = "partner_checked_in";
+      appointment.appointmentStatus = "scheduled";
     }
 
     await appointment.save();
