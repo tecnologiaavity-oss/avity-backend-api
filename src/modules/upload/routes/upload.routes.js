@@ -1,36 +1,42 @@
 const express = require("express");
 const multer = require("multer");
 const path = require("path");
+const fs = require("fs");
 const { authMiddleware } = require("../../../middlewares/authMiddleware");
 
 const router = express.Router();
 
+const uploadDir = path.join(process.cwd(), "uploads");
+
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+const allowedMimeTypes = ["application/pdf", "image/png", "image/jpeg"];
+
+const allowedExtensions = [".pdf", ".png", ".jpg", ".jpeg"];
+
 const storage = multer.diskStorage({
   destination(req, file, cb) {
-    cb(null, "uploads/");
+    cb(null, uploadDir);
   },
 
   filename(req, file, cb) {
-    const uniqueName =
-      Date.now() + "-" + Math.round(Math.random() * 1e9);
-
-    cb(
-      null,
-      uniqueName + path.extname(file.originalname)
-    );
+    const ext = path.extname(file.originalname).toLowerCase();
+    const uniqueName = `${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
+    cb(null, uniqueName);
   },
 });
 
 const fileFilter = (req, file, cb) => {
-  const allowed = [
-    "application/pdf",
-    "image/png",
-    "image/jpeg",
-    "image/jpg",
-  ];
+  const ext = path.extname(file.originalname).toLowerCase();
 
-  if (!allowed.includes(file.mimetype)) {
+  if (!allowedMimeTypes.includes(file.mimetype)) {
     return cb(new Error("Tipo de arquivo não permitido."));
+  }
+
+  if (!allowedExtensions.includes(ext)) {
+    return cb(new Error("Extensão de arquivo não permitida."));
   }
 
   cb(null, true);
@@ -40,15 +46,27 @@ const upload = multer({
   storage,
   fileFilter,
   limits: {
-    fileSize: 10 * 1024 * 1024,
+    fileSize: 5 * 1024 * 1024,
+    files: 1,
   },
 });
 
-router.post(
-  "/",
-  authMiddleware,
-  upload.single("file"),
-  (req, res) => {
+router.post("/", authMiddleware, (req, res) => {
+  upload.single("file")(req, res, (error) => {
+    if (error) {
+      return res.status(400).json({
+        success: false,
+        message: error.message || "Erro ao enviar arquivo.",
+      });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: "Arquivo não enviado.",
+      });
+    }
+
     return res.status(201).json({
       success: true,
       message: "Upload realizado com sucesso.",
@@ -60,7 +78,7 @@ router.post(
         url: `/uploads/${req.file.filename}`,
       },
     });
-  }
-);
+  });
+});
 
 module.exports = router;
