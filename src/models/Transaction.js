@@ -28,6 +28,7 @@ const transactionSchema = new mongoose.Schema(
         "withdraw_request",
         "withdraw_paid",
         "withdraw_rejected",
+        "payout_reserved",
         "refund",
         "chargeback",
         "manual_adjustment",
