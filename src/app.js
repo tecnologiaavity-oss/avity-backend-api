@@ -89,8 +89,6 @@ app.get("/", (req, res) => {
   });
 });
 
-app.use("/uploads", express.static("uploads"));
-
 if (process.env.NODE_ENV !== "production") {
   app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 }

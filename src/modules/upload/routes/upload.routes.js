@@ -13,7 +13,6 @@ if (!fs.existsSync(uploadDir)) {
 }
 
 const allowedMimeTypes = ["application/pdf", "image/png", "image/jpeg"];
-
 const allowedExtensions = [".pdf", ".png", ".jpg", ".jpeg"];
 
 const storage = multer.diskStorage({
@@ -75,10 +74,24 @@ router.post("/", authMiddleware, (req, res) => {
         originalName: req.file.originalname,
         mimeType: req.file.mimetype,
         size: req.file.size,
-        url: `/uploads/${req.file.filename}`,
+        url: `/api/upload/${req.file.filename}`,
       },
     });
   });
+});
+
+router.get("/:filename", authMiddleware, (req, res) => {
+  const filename = path.basename(req.params.filename);
+  const filePath = path.join(uploadDir, filename);
+
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).json({
+      success: false,
+      message: "Arquivo não encontrado.",
+    });
+  }
+
+  return res.sendFile(filePath);
 });
 
 module.exports = router;
