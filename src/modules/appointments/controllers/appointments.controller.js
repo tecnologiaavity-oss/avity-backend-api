@@ -2,7 +2,6 @@ const Appointment = require("../../../models/Appointment");
 const Wallet = require("../../../models/Wallet");
 const Transaction = require("../../../models/Transaction");
 const AuditLog = require("../../../models/AuditLog");
-const Partner = require("../../../models/Partner");
 
 const {
   createNotification,
@@ -19,9 +18,7 @@ function hasAppointmentAccess(user, appointment) {
     return String(appointment.patientId) === String(user.id);
   }
 
-  if (
-    ["partner_owner", "partner_staff", "partner"].includes(user.role)
-  ) {
+  if (["partner_owner", "partner_staff", "partner"].includes(user.role)) {
     return String(appointment.partnerId) === String(user.partnerId);
   }
 
@@ -31,7 +28,6 @@ function hasAppointmentAccess(user, appointment) {
 async function listAppointments(req, res) {
   try {
     const { patientId, partnerId, status, category, date } = req.query;
-
     const filter = {};
 
     if (["super_admin", "admin"].includes(req.user.role)) {
@@ -43,9 +39,7 @@ async function listAppointments(req, res) {
       filter.patientId = req.user.id;
     }
 
-    if (
-      ["partner_owner", "partner_staff", "partner"].includes(req.user.role)
-    ) {
+    if (["partner_owner", "partner_staff", "partner"].includes(req.user.role)) {
       filter.partnerId = req.user.partnerId;
     }
 
@@ -140,17 +134,6 @@ async function confirmAppointment(req, res) {
     appointment.appointmentStatus = "confirmed";
     await appointment.save();
 
-    await createNotification({
-      userId: appointment.patientId,
-      audience: "patient",
-      type: "appointment_created",
-      title: "Consulta confirmada",
-      message: "Sua consulta foi confirmada.",
-      metadata: {
-        appointmentId: appointment._id,
-      },
-    });
-
     return res.json({
       success: true,
       message: "Agendamento confirmado.",
@@ -185,6 +168,14 @@ async function patientCheckin(req, res) {
 
     appointment.patientCheckin = true;
     appointment.patientCheckinAt = new Date();
+
+    if (appointment.partnerCheckin) {
+      appointment.checkinStatus = "double_confirmed";
+      appointment.appointmentStatus = "ready_to_start";
+    } else {
+      appointment.checkinStatus = "patient_checked_in";
+      appointment.appointmentStatus = "patient_checked_in";
+    }
 
     await appointment.save();
 
@@ -223,6 +214,14 @@ async function partnerCheckin(req, res) {
     appointment.partnerCheckin = true;
     appointment.partnerCheckinAt = new Date();
 
+    if (appointment.patientCheckin) {
+      appointment.checkinStatus = "double_confirmed";
+      appointment.appointmentStatus = "ready_to_start";
+    } else {
+      appointment.checkinStatus = "partner_checked_in";
+      appointment.appointmentStatus = "partner_checked_in";
+    }
+
     await appointment.save();
 
     return res.json({
@@ -257,8 +256,15 @@ async function startAppointment(req, res) {
       });
     }
 
+    if (appointment.checkinStatus !== "double_confirmed") {
+      return res.status(400).json({
+        success: false,
+        message: "Check-in duplo obrigatório.",
+      });
+    }
+
     appointment.appointmentStatus = "in_progress";
-    appointment.startedAt = new Date();
+    appointment.inProgressAt = new Date();
 
     await appointment.save();
 
@@ -331,7 +337,7 @@ async function completeAppointment(req, res) {
       status: "completed",
       relatedAppointmentId: appointment._id,
       relatedRequestId: appointment.requestId,
-      description: "Repasse líquido creditado.",
+      description: "Repasse parceiro.",
       processedAt: new Date(),
     });
 
