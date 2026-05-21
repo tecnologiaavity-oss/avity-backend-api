@@ -3,10 +3,6 @@ const Wallet = require("../../../models/Wallet");
 const Transaction = require("../../../models/Transaction");
 const AuditLog = require("../../../models/AuditLog");
 
-const {
-  createNotification,
-} = require("../../notifications/services/notification.service");
-
 function hasAppointmentAccess(user, appointment) {
   if (!user) return false;
 
@@ -19,7 +15,10 @@ function hasAppointmentAccess(user, appointment) {
   }
 
   if (["partner_owner", "partner_staff", "partner"].includes(user.role)) {
-    return String(appointment.partnerId) === String(user.partnerId);
+    return (
+      String(appointment.partnerId) ===
+      String(user.partnerId || user.id)
+    );
   }
 
   return false;
@@ -27,42 +26,25 @@ function hasAppointmentAccess(user, appointment) {
 
 async function listAppointments(req, res) {
   try {
-    const { patientId, partnerId, status, category, date } = req.query;
     const filter = {};
-
-    if (["super_admin", "admin"].includes(req.user.role)) {
-      if (patientId) filter.patientId = patientId;
-      if (partnerId) filter.partnerId = partnerId;
-    }
 
     if (req.user.role === "patient") {
       filter.patientId = req.user.id;
     }
 
     if (["partner_owner", "partner_staff", "partner"].includes(req.user.role)) {
-      filter.partnerId = req.user.partnerId;
+      filter.partnerId = req.user.partnerId || req.user.id;
     }
 
-    if (status) filter.appointmentStatus = status;
-    if (category) filter.category = category;
-
-    if (date) {
-      const start = new Date(date);
-      const end = new Date(date);
-      end.setDate(end.getDate() + 1);
-
-      filter.scheduledDate = {
-        $gte: start,
-        $lt: end,
-      };
+    if (req.query.status) {
+      filter.appointmentStatus = req.query.status;
     }
 
     const appointments = await Appointment.find(filter)
       .populate("patientId", "name email phone")
-      .populate("partnerId", "companyName tradeName partnerType address")
-      .populate("offerId", "title specialty avityMode offerType")
-      .populate("requestId", "status offerValue counterOfferValue")
-      .sort({ scheduledDate: 1, scheduledTime: 1 });
+      .populate("partnerId", "companyName tradeName partnerType")
+      .populate("offerId", "title specialty offerType")
+      .sort({ createdAt: -1 });
 
     return res.json({
       success: true,
@@ -82,9 +64,8 @@ async function getAppointmentById(req, res) {
   try {
     const appointment = await Appointment.findById(req.params.id)
       .populate("patientId", "name email phone")
-      .populate("partnerId", "companyName tradeName partnerType address")
-      .populate("offerId", "title specialty avityMode offerType")
-      .populate("requestId", "status offerValue counterOfferValue");
+      .populate("partnerId", "companyName tradeName partnerType")
+      .populate("offerId", "title specialty offerType");
 
     if (!appointment) {
       return res.status(404).json({
@@ -113,41 +94,6 @@ async function getAppointmentById(req, res) {
   }
 }
 
-async function confirmAppointment(req, res) {
-  try {
-    const appointment = await Appointment.findById(req.params.id);
-
-    if (!appointment) {
-      return res.status(404).json({
-        success: false,
-        message: "Agendamento não encontrado.",
-      });
-    }
-
-    if (!hasAppointmentAccess(req.user, appointment)) {
-      return res.status(403).json({
-        success: false,
-        message: "Acesso negado.",
-      });
-    }
-
-    appointment.appointmentStatus = "confirmed";
-    await appointment.save();
-
-    return res.json({
-      success: true,
-      message: "Agendamento confirmado.",
-      data: appointment,
-    });
-  } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Erro ao confirmar agendamento.",
-      error: error.message,
-    });
-  }
-}
-
 async function patientCheckin(req, res) {
   try {
     const appointment = await Appointment.findById(req.params.id);
@@ -166,10 +112,9 @@ async function patientCheckin(req, res) {
       });
     }
 
-    appointment.patientCheckin = true;
     appointment.patientCheckinAt = new Date();
 
-    if (appointment.partnerCheckin) {
+    if (appointment.partnerCheckinAt) {
       appointment.checkinStatus = "double_confirmed";
       appointment.appointmentStatus = "ready_to_start";
     } else {
@@ -187,7 +132,7 @@ async function patientCheckin(req, res) {
   } catch (error) {
     return res.status(500).json({
       success: false,
-      message: "Erro no check-in.",
+      message: "Erro no check-in do paciente.",
       error: error.message,
     });
   }
@@ -211,10 +156,9 @@ async function partnerCheckin(req, res) {
       });
     }
 
-    appointment.partnerCheckin = true;
     appointment.partnerCheckinAt = new Date();
 
-    if (appointment.patientCheckin) {
+    if (appointment.patientCheckinAt) {
       appointment.checkinStatus = "double_confirmed";
       appointment.appointmentStatus = "ready_to_start";
     } else {
@@ -303,7 +247,7 @@ async function completeAppointment(req, res) {
     if (appointment.appointmentStatus !== "in_progress") {
       return res.status(400).json({
         success: false,
-        message: "Somente atendimento em andamento pode ser concluído.",
+        message: "Atendimento precisa estar em andamento.",
       });
     }
 
@@ -337,17 +281,15 @@ async function completeAppointment(req, res) {
       status: "completed",
       relatedAppointmentId: appointment._id,
       relatedRequestId: appointment.requestId,
-      description: "Repasse parceiro.",
+      description: "Repasse por atendimento concluído.",
       processedAt: new Date(),
     });
 
     await AuditLog.create({
       actorUserId: req.user.id,
       actorRole: req.user.role,
-      actorName: req.user.name,
-      action: "complete_appointment",
+      action: "appointment_completed",
       module: "appointments",
-      targetType: "appointment",
       targetId: appointment._id,
       description: "Agendamento concluído.",
       severity: "critical",
@@ -361,7 +303,7 @@ async function completeAppointment(req, res) {
   } catch (error) {
     return res.status(500).json({
       success: false,
-      message: "Erro ao concluir.",
+      message: "Erro ao concluir atendimento.",
       error: error.message,
     });
   }
@@ -386,6 +328,7 @@ async function cancelAppointment(req, res) {
     }
 
     appointment.appointmentStatus = "cancelled";
+    appointment.cancellationReason = req.body.reason || "Cancelado manualmente";
 
     await appointment.save();
 
@@ -406,7 +349,6 @@ async function cancelAppointment(req, res) {
 module.exports = {
   listAppointments,
   getAppointmentById,
-  confirmAppointment,
   patientCheckin,
   partnerCheckin,
   startAppointment,
