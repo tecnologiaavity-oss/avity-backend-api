@@ -22,24 +22,24 @@
   "license": "ISC",
   "dependencies": {
     "bcryptjs": "^3.0.3",
-    "cors": "^2.8.6",
-    "dotenv": "^17.4.2",
-    "express": "^5.2.1",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.1",
+    "express": "^5.1.0",
     "express-mongo-sanitize": "^2.2.0",
-    "express-rate-limit": "^8.5.2",
-    "helmet": "^8.1.0",
+    "express-rate-limit": "^8.1.0",
+    "helmet": "^8.0.0",
     "hpp": "^0.2.3",
-    "jsonwebtoken": "^9.0.3",
-    "mongodb": "^6.21.0",
-    "mongoose": "8.18.0",
-    "multer": "^2.1.1",
+    "jsonwebtoken": "^9.0.2",
+    "mongodb": "^6.18.0",
+    "mongoose": "8.19.1",
+    "multer": "^2.0.2",
     "node-cron": "^4.2.1",
-    "socket.io": "^4.8.3",
+    "socket.io": "^4.8.1",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1",
     "xss-clean": "^0.1.4"
   },
   "devDependencies": {
-    "nodemon": "^3.1.14"
+    "nodemon": "^3.1.10"
   }
 }
