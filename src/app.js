@@ -3,7 +3,6 @@ const cors = require("cors");
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 const hpp = require("hpp");
-const xss = require("xss-clean");
 
 const authRoutes = require("./modules/auth/routes/auth.routes");
 const partnerRoutes = require("./modules/partners/routes/partners.routes");
@@ -80,7 +79,6 @@ app.use("/api", apiLimiter);
 app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 
-app.use(xss());
 app.use(
   hpp({
     whitelist: ["specialties", "category", "status"],
