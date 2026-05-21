@@ -5,8 +5,6 @@ const rateLimit = require("express-rate-limit");
 const mongoSanitize = require("express-mongo-sanitize");
 const hpp = require("hpp");
 const xss = require("xss-clean");
-const swaggerUi = require("swagger-ui-express");
-const swaggerSpec = require("./docs/swagger");
 
 const authRoutes = require("./modules/auth/routes/auth.routes");
 const partnerRoutes = require("./modules/partners/routes/partners.routes");
@@ -101,16 +99,12 @@ app.get("/", (req, res) => {
   });
 });
 
-if (process.env.NODE_ENV === "production") {
-  app.use("/api/docs", (req, res) => {
-    return res.status(404).json({
-      success: false,
-      message: "Rota não encontrada.",
-    });
+app.use("/api/docs", (req, res) => {
+  return res.status(404).json({
+    success: false,
+    message: "Rota não encontrada.",
   });
-} else {
-  app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
-}
+});
 
 app.use("/api/auth", authRoutes);
 app.use("/api/partners", partnerRoutes);
