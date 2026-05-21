@@ -15,10 +15,7 @@ function hasAppointmentAccess(user, appointment) {
   }
 
   if (["partner_owner", "partner_staff", "partner"].includes(user.role)) {
-    return (
-      String(appointment.partnerId) ===
-      String(user.partnerId || user.id)
-    );
+    return String(appointment.partnerId) === String(user.partnerId || user.id);
   }
 
   return false;
@@ -89,6 +86,41 @@ async function getAppointmentById(req, res) {
     return res.status(500).json({
       success: false,
       message: "Erro ao buscar agendamento.",
+      error: error.message,
+    });
+  }
+}
+
+async function confirmAppointment(req, res) {
+  try {
+    const appointment = await Appointment.findById(req.params.id);
+
+    if (!appointment) {
+      return res.status(404).json({
+        success: false,
+        message: "Agendamento não encontrado.",
+      });
+    }
+
+    if (!hasAppointmentAccess(req.user, appointment)) {
+      return res.status(403).json({
+        success: false,
+        message: "Acesso negado.",
+      });
+    }
+
+    appointment.appointmentStatus = "confirmed";
+    await appointment.save();
+
+    return res.json({
+      success: true,
+      message: "Agendamento confirmado.",
+      data: appointment,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Erro ao confirmar agendamento.",
       error: error.message,
     });
   }
@@ -349,6 +381,7 @@ async function cancelAppointment(req, res) {
 module.exports = {
   listAppointments,
   getAppointmentById,
+  confirmAppointment,
   patientCheckin,
   partnerCheckin,
   startAppointment,
