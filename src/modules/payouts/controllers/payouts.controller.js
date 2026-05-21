@@ -5,29 +5,19 @@ const Transaction = require("../../../models/Transaction");
 const AuditLog = require("../../../models/AuditLog");
 
 function isFinanceAdmin(user) {
-  return [
-    "super_admin",
-    "admin",
-    "finance_admin",
-    "operations_admin",
-  ].includes(user?.role);
+  return ["super_admin", "admin", "finance_admin", "operations_admin"].includes(user?.role);
 }
 
-function assertFinanceAccess(req, res) {
-  if (!isFinanceAdmin(req.user)) {
-    res.status(403).json({
-      success: false,
-      message: "Acesso restrito ao financeiro.",
-    });
-    return false;
-  }
-
-  return true;
+function deny(res) {
+  return res.status(403).json({
+    success: false,
+    message: "Acesso restrito ao financeiro.",
+  });
 }
 
 async function createPayoutBatch(req, res) {
   try {
-    if (!assertFinanceAccess(req, res)) return;
+    if (!isFinanceAdmin(req.user)) return deny(res);
 
     const { cycleDate, notes } = req.body;
 
@@ -44,10 +34,7 @@ async function createPayoutBatch(req, res) {
       });
     }
 
-    const totalAmount = wallets.reduce(
-      (sum, wallet) => sum + wallet.balance,
-      0
-    );
+    const totalAmount = wallets.reduce((sum, wallet) => sum + wallet.balance, 0);
 
     const batch = await PayoutBatch.create({
       cycleDate: cycleDate ? new Date(cycleDate) : new Date(),
@@ -55,20 +42,36 @@ async function createPayoutBatch(req, res) {
       totalPartners: wallets.length,
       totalAmount,
       createdBy: req.user.id,
-      notes: notes || "Ciclo mensal dia 15.",
+      notes: notes || "Ciclo de repasse.",
     });
 
     const items = [];
 
     for (const wallet of wallets) {
+      const amount = wallet.balance;
+
+      wallet.balance = 0;
+      wallet.blockedBalance += amount;
+      await wallet.save();
+
       const item = await PayoutItem.create({
         batchId: batch._id,
         partnerId: wallet.partnerId,
         walletId: wallet._id,
-        amount: wallet.balance,
+        amount,
         status: "pending_review",
         bankSnapshot: wallet.bankAccount,
-        notes: "Aguardando aprovação.",
+        notes: "Saldo reservado para repasse.",
+      });
+
+      await Transaction.create({
+        walletId: wallet._id,
+        ownerType: "partner",
+        ownerId: wallet.partnerId,
+        type: "payout_reserved",
+        amount,
+        status: "pending",
+        description: "Saldo reservado para lote de repasse.",
       });
 
       items.push(item);
@@ -82,7 +85,7 @@ async function createPayoutBatch(req, res) {
       module: "finance",
       targetType: "payout_batch",
       targetId: batch._id,
-      description: `Lote criado com ${wallets.length} parceiros.`,
+      description: `Lote criado e saldo reservado para ${wallets.length} parceiro(s).`,
       severity: "critical",
       ipAddress: req.ip,
       userAgent: req.headers["user-agent"],
@@ -90,11 +93,8 @@ async function createPayoutBatch(req, res) {
 
     return res.status(201).json({
       success: true,
-      message: "Lote criado com sucesso.",
-      data: {
-        batch,
-        items,
-      },
+      message: "Lote criado com saldo reservado.",
+      data: { batch, items },
     });
   } catch (error) {
     return res.status(500).json({
@@ -107,14 +107,12 @@ async function createPayoutBatch(req, res) {
 
 async function listPayoutBatches(req, res) {
   try {
-    if (!assertFinanceAccess(req, res)) return;
+    if (!isFinanceAdmin(req.user)) return deny(res);
 
     const filter = {};
     if (req.query.status) filter.status = req.query.status;
 
-    const batches = await PayoutBatch.find(filter).sort({
-      createdAt: -1,
-    });
+    const batches = await PayoutBatch.find(filter).sort({ createdAt: -1 });
 
     return res.json({
       success: true,
@@ -132,7 +130,7 @@ async function listPayoutBatches(req, res) {
 
 async function getPayoutBatchById(req, res) {
   try {
-    if (!assertFinanceAccess(req, res)) return;
+    if (!isFinanceAdmin(req.user)) return deny(res);
 
     const batch = await PayoutBatch.findById(req.params.id);
 
@@ -143,18 +141,13 @@ async function getPayoutBatchById(req, res) {
       });
     }
 
-    const items = await PayoutItem.find({
-      batchId: batch._id,
-    })
+    const items = await PayoutItem.find({ batchId: batch._id })
       .populate("partnerId", "companyName tradeName email")
-      .populate("walletId", "balance bankAccount status");
+      .populate("walletId", "balance blockedBalance pendingBalance bankAccount status");
 
     return res.json({
       success: true,
-      data: {
-        batch,
-        items,
-      },
+      data: { batch, items },
     });
   } catch (error) {
     return res.status(500).json({
@@ -167,7 +160,7 @@ async function getPayoutBatchById(req, res) {
 
 async function approvePayoutBatch(req, res) {
   try {
-    if (!assertFinanceAccess(req, res)) return;
+    if (!isFinanceAdmin(req.user)) return deny(res);
 
     const batch = await PayoutBatch.findById(req.params.id);
 
@@ -188,17 +181,11 @@ async function approvePayoutBatch(req, res) {
     batch.status = "approved";
     batch.approvedBy = req.user.id;
     batch.approvedAt = new Date();
-
     await batch.save();
 
     await PayoutItem.updateMany(
-      {
-        batchId: batch._id,
-        status: "pending_review",
-      },
-      {
-        status: "approved",
-      }
+      { batchId: batch._id, status: "pending_review" },
+      { status: "approved" }
     );
 
     await AuditLog.create({
@@ -231,7 +218,7 @@ async function approvePayoutBatch(req, res) {
 
 async function markPayoutBatchAsPaid(req, res) {
   try {
-    if (!assertFinanceAccess(req, res)) return;
+    if (!isFinanceAdmin(req.user)) return deny(res);
 
     const batch = await PayoutBatch.findById(req.params.id);
 
@@ -256,12 +243,17 @@ async function markPayoutBatchAsPaid(req, res) {
 
     for (const item of items) {
       const wallet = await Wallet.findById(item.walletId);
-
       if (!wallet) continue;
 
-      if (wallet.balance < item.amount) continue;
+      if (wallet.blockedBalance < item.amount) {
+        return res.status(400).json({
+          success: false,
+          message: "Saldo reservado insuficiente para pagamento.",
+          itemId: item._id,
+        });
+      }
 
-      wallet.balance -= item.amount;
+      wallet.blockedBalance -= item.amount;
       await wallet.save();
 
       await Transaction.create({
@@ -294,6 +286,8 @@ async function markPayoutBatchAsPaid(req, res) {
       targetId: batch._id,
       description: "Lote marcado como pago.",
       severity: "critical",
+      ipAddress: req.ip,
+      userAgent: req.headers["user-agent"],
     });
 
     return res.json({
