@@ -212,3 +212,23 @@ async function login(req, res) {
     },
   },
 });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Erro ao realizar login.",
+    });
+  }
+}
+
+async function me(req, res) {
+  return res.json({
+    success: true,
+    user: req.user,
+  });
+}
+
+module.exports = {
+  registerAdmin,
+  login,
+  me,
+};
