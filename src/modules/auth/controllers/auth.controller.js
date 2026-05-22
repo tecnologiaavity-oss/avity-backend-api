@@ -109,13 +109,16 @@ async function login(req, res) {
 
     const normalizedIdentifier = String(identifier).trim().toLowerCase();
 
-    const user = await User.findOne({
-      $or: [
-        { email: normalizedIdentifier },
-        { phone: normalizedIdentifier },
-        { phone: String(identifier).trim() },
-      ],
-    }).select("+password");
+    const phoneClean = String(identifier).replace(/\D/g, "");
+
+const user = await User.findOne({
+  $or: [
+    { email: normalizedIdentifier },
+    { phone: normalizedIdentifier },
+    { phone: String(identifier).trim() },
+    { phone: phoneClean },
+  ],
+}).select("+password");
 
     if (!user) {
       await AuditLog.create({
