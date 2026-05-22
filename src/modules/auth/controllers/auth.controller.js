@@ -18,7 +18,7 @@ function generateToken(user) {
 
 async function registerAdmin(req, res) {
   try {
-    const { name, email, password, role, permissions } = req.body;
+    const { name, email, password, role, permissions, phone, partnerId } = req.body;
 
     const allowedRoles = [
       "admin",
@@ -37,7 +37,9 @@ async function registerAdmin(req, res) {
       });
     }
 
-    const exists = await User.findOne({ email });
+    const exists = await User.findOne({
+      $or: [{ email }, { phone }],
+    });
 
     if (exists) {
       return res.status(400).json({
@@ -49,21 +51,23 @@ async function registerAdmin(req, res) {
     const user = await User.create({
       name,
       email,
+      phone,
       password,
       role,
+      partnerId: partnerId || null,
       permissions: permissions || [],
       status: "active",
     });
 
     await AuditLog.create({
-      actorUserId: req.user.id,
-      actorRole: req.user.role,
-      actorName: req.user.name,
+      actorUserId: req.user?.id || null,
+      actorRole: req.user?.role || "system",
+      actorName: req.user?.name || "Sistema",
       action: "register_admin",
       module: "auth",
       targetType: "user",
       targetId: user._id,
-      description: `Usuário administrativo ${user.name} criado.`,
+      description: `Usuário ${user.name} criado.`,
       severity: "security",
       ipAddress: req.ip,
       userAgent: req.headers["user-agent"],
@@ -76,33 +80,51 @@ async function registerAdmin(req, res) {
         id: user._id,
         name: user.name,
         email: user.email,
+        phone: user.phone,
         role: user.role,
         permissions: user.permissions,
+        partnerId: user.partnerId,
       },
     });
   } catch (error) {
     return res.status(500).json({
       success: false,
       message: "Erro ao criar usuário.",
-      error: error.message,
     });
   }
 }
 
 async function login(req, res) {
   try {
-    const { email, password } = req.body;
+    const { email, phone, telefone, password } = req.body;
 
-    const user = await User.findOne({ email }).select("+password");
+    const identifier = email || phone || telefone;
+
+    if (!identifier || !password) {
+      return res.status(400).json({
+        success: false,
+        message: "Informe telefone/e-mail e senha.",
+      });
+    }
+
+    const normalizedIdentifier = String(identifier).trim().toLowerCase();
+
+    const user = await User.findOne({
+      $or: [
+        { email: normalizedIdentifier },
+        { phone: normalizedIdentifier },
+        { phone: String(identifier).trim() },
+      ],
+    }).select("+password");
 
     if (!user) {
       await AuditLog.create({
         actorRole: "unknown",
-        actorName: email || "desconhecido",
+        actorName: normalizedIdentifier || "desconhecido",
         action: "login_failed",
         module: "auth",
         targetType: "user",
-        description: "Tentativa de login com e-mail inexistente.",
+        description: "Tentativa de login com usuário inexistente.",
         severity: "security",
         ipAddress: req.ip,
         userAgent: req.headers["user-agent"],
@@ -132,7 +154,7 @@ async function login(req, res) {
         module: "auth",
         targetType: "user",
         targetId: user._id,
-        description: `Senha inválida para ${user.email}.`,
+        description: `Senha inválida para ${user.email || user.phone}.`,
         severity: "security",
         ipAddress: req.ip,
         userAgent: req.headers["user-agent"],
@@ -171,15 +193,16 @@ async function login(req, res) {
         id: user._id,
         name: user.name,
         email: user.email,
+        phone: user.phone,
         role: user.role,
         permissions: user.permissions,
+        partnerId: user.partnerId,
       },
     });
   } catch (error) {
     return res.status(500).json({
       success: false,
       message: "Erro ao realizar login.",
-      error: error.message,
     });
   }
 }
