@@ -26,6 +26,7 @@ const userSchema = new mongoose.Schema(
     phone: {
       type: String,
       default: null,
+      trim: true,
     },
 
     role: {
@@ -58,6 +59,57 @@ const userSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Partner",
       default: null,
+    },
+
+    priority: {
+      active: {
+        type: Boolean,
+        default: false,
+      },
+      status: {
+        type: String,
+        enum: ["inactive", "active", "past_due", "cancelled", "expired"],
+        default: "inactive",
+      },
+      plan: {
+        type: String,
+        default: null,
+      },
+      planName: {
+        type: String,
+        default: null,
+      },
+      memberId: {
+        type: String,
+        default: null,
+        index: true,
+      },
+      coverage: {
+        type: String,
+        enum: ["none", "national", "national_international"],
+        default: "none",
+      },
+      virtualCardEnabled: {
+        type: Boolean,
+        default: false,
+      },
+      physicalCardRequested: {
+        type: Boolean,
+        default: false,
+      },
+      physicalCardStatus: {
+        type: String,
+        enum: ["none", "requested", "processing", "shipped", "delivered"],
+        default: "none",
+      },
+      startedAt: {
+        type: Date,
+        default: null,
+      },
+      expiresAt: {
+        type: Date,
+        default: null,
+      },
     },
 
     lastLoginAt: {

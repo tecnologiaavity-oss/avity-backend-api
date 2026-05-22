@@ -185,37 +185,30 @@ async function login(req, res) {
       userAgent: req.headers["user-agent"],
     });
 
-    return res.json({
-      success: true,
-      message: "Login realizado com sucesso.",
-      token,
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        phone: user.phone,
-        role: user.role,
-        permissions: user.permissions,
-        partnerId: user.partnerId,
-      },
-    });
-  } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Erro ao realizar login.",
-    });
-  }
-}
-
-async function me(req, res) {
   return res.json({
-    success: true,
-    user: req.user,
-  });
-}
-
-module.exports = {
-  registerAdmin,
-  login,
-  me,
-};
+  success: true,
+  message: "Login realizado com sucesso.",
+  token,
+  user: {
+    id: user._id,
+    name: user.name,
+    email: user.email,
+    phone: user.phone,
+    role: user.role,
+    permissions: user.permissions,
+    partnerId: user.partnerId,
+    priority: user.priority || {
+      active: false,
+      status: "inactive",
+      plan: null,
+      planName: null,
+      memberId: null,
+      coverage: "none",
+      virtualCardEnabled: false,
+      physicalCardRequested: false,
+      physicalCardStatus: "none",
+      startedAt: null,
+      expiresAt: null,
+    },
+  },
+});
