@@ -15,6 +15,7 @@ const searchRoutes = require("./modules/search/routes/search.routes");
 const notificationRoutes = require("./modules/notifications/routes/notifications.routes");
 const documentRoutes = require("./modules/documents/routes/documents.routes");
 const uploadRoutes = require("./modules/upload/routes/upload.routes");
+const paymentRoutes = require("./modules/payments/routes/payments.routes");
 
 const healthRoutes = require("./modules/health/health.routes");
 const fitnessRoutes = require("./modules/fitness/fitness.routes");
@@ -113,6 +114,7 @@ app.use("/api/search", searchRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/documents", documentRoutes);
 app.use("/api/upload", uploadRoutes);
+app.use("/api/payments", paymentRoutes);
 
 app.use("/api/health", healthRoutes);
 app.use("/api/fitness", fitnessRoutes);
