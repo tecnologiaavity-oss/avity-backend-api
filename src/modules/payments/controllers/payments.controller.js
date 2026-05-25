@@ -33,6 +33,36 @@ async function createPixPayment(req, res) {
   }
 }
 
+async function createCardPayment(req, res) {
+  try {
+    const { amount, requestId, appointmentId, cardData } = req.body;
+
+    const payment = await Payment.create({
+      userId: req.user.id,
+      requestId: requestId || null,
+      appointmentId: appointmentId || null,
+      amount,
+      method: "card",
+      status: "paid",
+      provider: "mock_card",
+      providerPaymentId: `CARD-${Date.now()}`,
+      paidAt: new Date(),
+    });
+
+    return res.json({
+      success: true,
+      message: "Pagamento com cartão aprovado.",
+      data: payment,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Erro ao processar cartão.",
+      error: error.message,
+    });
+  }
+}
+
 async function getPaymentStatus(req, res) {
   try {
     const payment = await Payment.findById(req.params.id);
@@ -84,8 +114,47 @@ async function mockApprovePayment(req, res) {
   }
 }
 
+async function createCoparticipationPayment(req, res) {
+  try {
+    const { amount, requestId, appointmentId, companyId, employeeCpf } = req.body;
+
+    if (!companyId || !employeeCpf) {
+      return res.status(400).json({
+        success: false,
+        message: "Informe ID da empresa e CPF do colaborador.",
+      });
+    }
+
+    const payment = await Payment.create({
+      userId: req.user.id,
+      requestId: requestId || null,
+      appointmentId: appointmentId || null,
+      amount,
+      method: "card",
+      status: "paid",
+      provider: "corporate_coparticipation",
+      providerPaymentId: `COPART-${companyId}-${Date.now()}`,
+      paidAt: new Date(),
+    });
+
+    return res.json({
+      success: true,
+      message: "Coparticipação autorizada.",
+      data: payment,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Erro ao autorizar coparticipação.",
+      error: error.message,
+    });
+  }
+}
+
 module.exports = {
   createPixPayment,
+  createCardPayment,
+  createCoparticipationPayment,
   getPaymentStatus,
   mockApprovePayment,
 };
