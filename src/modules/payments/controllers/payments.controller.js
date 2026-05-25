@@ -1,4 +1,18 @@
 const Payment = require("../../../models/Payment");
+const Appointment = require("../../../models/Appointment");
+
+async function markAppointmentAsPaid(appointmentId) {
+  if (!appointmentId) return null;
+
+  return await Appointment.findByIdAndUpdate(
+    appointmentId,
+    {
+      paymentStatus: "paid",
+      appointmentStatus: "confirmed",
+    },
+    { new: true }
+  );
+}
 
 async function createPixPayment(req, res) {
   try {
@@ -49,15 +63,62 @@ async function createCardPayment(req, res) {
       paidAt: new Date(),
     });
 
+    const appointment = await markAppointmentAsPaid(appointmentId);
+
     return res.json({
       success: true,
       message: "Pagamento com cartão aprovado.",
-      data: payment,
+      data: {
+        payment,
+        appointment,
+      },
     });
   } catch (error) {
     return res.status(500).json({
       success: false,
       message: "Erro ao processar cartão.",
+      error: error.message,
+    });
+  }
+}
+
+async function createCoparticipationPayment(req, res) {
+  try {
+    const { amount, requestId, appointmentId, companyId, employeeCpf } = req.body;
+
+    if (!companyId || !employeeCpf) {
+      return res.status(400).json({
+        success: false,
+        message: "Informe ID da empresa e CPF do colaborador.",
+      });
+    }
+
+    const payment = await Payment.create({
+      userId: req.user.id,
+      requestId: requestId || null,
+      appointmentId: appointmentId || null,
+      amount,
+      method: "card",
+      status: "paid",
+      provider: "corporate_coparticipation",
+      providerPaymentId: `COPART-${companyId}-${Date.now()}`,
+      paidAt: new Date(),
+    });
+
+    const appointment = await markAppointmentAsPaid(appointmentId);
+
+    return res.json({
+      success: true,
+      message: "Coparticipação autorizada.",
+      data: {
+        payment,
+        appointment,
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Erro ao autorizar coparticipação.",
       error: error.message,
     });
   }
@@ -102,51 +163,19 @@ async function mockApprovePayment(req, res) {
 
     await payment.save();
 
+    const appointment = await markAppointmentAsPaid(payment.appointmentId);
+
     return res.json({
       success: true,
-      data: payment,
+      data: {
+        payment,
+        appointment,
+      },
     });
   } catch (error) {
     return res.status(500).json({
       success: false,
       message: "Erro ao aprovar pagamento.",
-    });
-  }
-}
-
-async function createCoparticipationPayment(req, res) {
-  try {
-    const { amount, requestId, appointmentId, companyId, employeeCpf } = req.body;
-
-    if (!companyId || !employeeCpf) {
-      return res.status(400).json({
-        success: false,
-        message: "Informe ID da empresa e CPF do colaborador.",
-      });
-    }
-
-    const payment = await Payment.create({
-      userId: req.user.id,
-      requestId: requestId || null,
-      appointmentId: appointmentId || null,
-      amount,
-      method: "card",
-      status: "paid",
-      provider: "corporate_coparticipation",
-      providerPaymentId: `COPART-${companyId}-${Date.now()}`,
-      paidAt: new Date(),
-    });
-
-    return res.json({
-      success: true,
-      message: "Coparticipação autorizada.",
-      data: payment,
-    });
-  } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Erro ao autorizar coparticipação.",
-      error: error.message,
     });
   }
 }
